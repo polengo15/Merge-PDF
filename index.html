@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Tool - Unisci File</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4f46e5">
+
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+
+    <style>
+        :root { --primary: #4f46e5; --primary-hover: #4338ca; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #f3f4f6; 
+            margin: 0; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+        }
+        .card { 
+            background: white; 
+            padding: 2rem; 
+            border-radius: 1rem; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1); 
+            width: 100%; 
+            max-width: 400px; 
+            text-align: center; 
+        }
+        h1 { color: #111827; font-size: 1.5rem; margin-bottom: 0.5rem; }
+        p { color: #6b7280; font-size: 0.9rem; margin-bottom: 1.5rem; }
+        
+        /* Area di Upload */
+        .upload-area {
+            border: 2px dashed #d1d5db;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            transition: border-color 0.3s;
+            cursor: pointer;
+        }
+        .upload-area:hover { border-color: var(--primary); }
+        
+        input[type="file"] { display: none; }
+        
+        label {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        label:hover { background: var(--primary-hover); }
+
+        button {
+            width: 100%;
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 1rem;
+            display: none; /* Nascosto finché non ci sono file */
+        }
+        button:active { transform: scale(0.98); }
+        
+        #status { margin-top: 1rem; font-size: 0.85rem; color: #374151; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h1>PDF Joiner</h1>
+    <p>Unisci i tuoi PDF localmente nel browser.</p>
+    
+    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+        <span style="font-size: 3rem;">📁</span>
+        <p id="fileCount">Nessun file selezionato</p>
+        <label for="fileInput">Seleziona PDF</label>
+        <input type="file" id="fileInput" accept=".pdf" multiple>
+    </div>
+
+    <button id="mergeBtn">Unisci e Scarica ora</button>
+    <div id="status"></div>
+</div>
+
+<script>
+    const { PDFDocument } = PDFLib;
+    const fileInput = document.getElementById('fileInput');
+    const mergeBtn = document.getElementById('mergeBtn');
+    const fileCountText = document.getElementById('fileCount');
+    const status = document.getElementById('status');
+
+    // Mostra il bottone solo se sono selezionati almeno 2 file
+    fileInput.addEventListener('change', () => {
+        const count = fileInput.files.length;
+        if (count >= 2) {
+            fileCountText.innerText = count + " file pronti";
+            mergeBtn.style.display = 'block';
+        } else {
+            fileCountText.innerText = "Seleziona almeno 2 file";
+            mergeBtn.style.display = 'none';
+        }
+    });
+
+    mergeBtn.addEventListener('click', async () => {
+        status.innerText = "⏳ Elaborazione in corso...";
+        mergeBtn.disabled = true;
+        
+        try {
+            const mergedPdf = await PDFDocument.create();
+            
+            for (const file of fileInput.files) {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await PDFDocument.load(arrayBuffer);
+                const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                copiedPages.forEach((page) => mergedPdf.addPage(page));
+            }
+
+            const pdfBytes = await mergedPdf.save();
+            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "unito_da_mia_app.pdf";
+            a.click();
+            
+            status.innerText = "✅ Completato!";
+            mergeBtn.disabled = false;
+        } catch (err) {
+            console.error(err);
+            status.innerText = "❌ Errore durante l'unione.";
+            mergeBtn.disabled = false;
+        }
+    });
+</script>
+
+</body>
+</html>
