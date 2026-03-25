@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Super Tool</title>
+    <title>PDF Super Tool V2</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4f46e5">
 
@@ -12,54 +12,63 @@
 
     <style>
         :root { --primary: #4f46e5; --secondary: #10b981; }
-        body { font-family: sans-serif; background: #f3f4f6; margin: 0; display: flex; justify-content: center; padding-top: 50px; }
-        .card { background: white; padding: 2rem; border-radius: 1rem; shadow: 0 10px 25px rgba(0,0,0,0.1); width: 90%; max-width: 500px; text-align: center; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f3f4f6; margin: 0; display: flex; justify-content: center; padding: 20px; }
+        .card { background: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 500px; text-align: center; }
         
-        /* Tabs per navigare */
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
-        .tab { flex: 1; padding: 10px; cursor: pointer; border-bottom: 3px solid #ddd; font-weight: bold; }
-        .tab.active { border-color: var(--primary); color: var(--primary); }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #eee; }
+        .tab { flex: 1; padding: 12px; cursor: pointer; font-weight: bold; color: #6b7280; transition: 0.3s; }
+        .tab.active { border-bottom: 3px solid var(--primary); color: var(--primary); }
         
-        .section { display: none; }
+        .section { display: none; text-align: left; }
         .section.active { display: block; }
 
-        .upload-area { border: 2px dashed #d1d5db; padding: 2rem; border-radius: 0.5rem; margin: 1rem 0; cursor: pointer; }
+        .upload-area { border: 2px dashed #d1d5db; padding: 1.5rem; border-radius: 0.5rem; margin: 1rem 0; cursor: pointer; text-align: center; }
         input[type="file"] { display: none; }
         
-        button { width: 100%; padding: 1rem; border-radius: 0.5rem; border: none; color: white; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        input[type="text"] { 
+            width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 5px; 
+            margin-top: 5px; box-sizing: border-box; font-size: 1rem;
+        }
+
+        .help-text { font-size: 0.8rem; color: #6b7280; margin-bottom: 15px; }
+
+        button { width: 100%; padding: 1rem; border-radius: 0.5rem; border: none; color: white; font-weight: bold; cursor: pointer; margin-top: 15px; font-size: 1rem; }
         .btn-merge { background: var(--primary); }
         .btn-split { background: var(--secondary); }
-        button:disabled { background: #ccc; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
         
-        #status { margin-top: 15px; font-size: 0.9rem; color: #555; }
+        #status { margin-top: 20px; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h1>PDF Super Tool 🛠️</h1>
-    
     <div class="tabs">
         <div class="tab active" onclick="switchTab('merge')">Unisci</div>
-        <div class="tab" onclick="switchTab('split')">Dividi</div>
+        <div class="tab" onclick="switchTab('split')">Dividi (Range)</div>
     </div>
 
     <div id="merge-section" class="section active">
-        <p>Seleziona 2 o più file per unirli.</p>
+        <h3>Unisci PDF</h3>
         <div class="upload-area" onclick="document.getElementById('mergeInput').click()">
-            <span id="mergeLabel">📁 Clicca per caricare i PDF</span>
+            <span id="mergeLabel">📁 Trascina o clicca per caricare</span>
             <input type="file" id="mergeInput" accept=".pdf" multiple>
         </div>
-        <button id="mergeBtn" class="btn-merge" disabled>Unisci e Scarica</button>
+        <button id="mergeBtn" class="btn-merge" disabled>Crea PDF Unico</button>
     </div>
 
     <div id="split-section" class="section">
-        <p>Carica un PDF per estrarre ogni pagina singolarmente.</p>
+        <h3>Dividi per Intervalli</h3>
         <div class="upload-area" onclick="document.getElementById('splitInput').click()">
-            <span id="splitLabel">📄 Clicca per caricare il PDF</span>
+            <span id="splitLabel">📄 Carica il file da dividere</span>
             <input type="file" id="splitInput" accept=".pdf">
         </div>
-        <button id="splitBtn" class="btn-split" disabled>Dividi in Pagine (ZIP)</button>
+        
+        <label>Inserisci intervalli (es: 1-3, 4-10, 11-20):</label>
+        <input type="text" id="ranges" placeholder="Es: 1-5, 6-12">
+        <p class="help-text">Usa la virgola per separare i file che vuoi creare.</p>
+
+        <button id="splitBtn" class="btn-split" disabled>Dividi in pacchetto ZIP</button>
     </div>
 
     <div id="status"></div>
@@ -68,7 +77,6 @@
 <script>
     const { PDFDocument } = PDFLib;
 
-    // --- LOGICA NAVIGAZIONE ---
     function switchTab(type) {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -87,22 +95,24 @@
     };
 
     mergeBtn.onclick = async () => {
-        const status = document.getElementById('status');
-        status.innerText = "⏳ Unione in corso...";
-        const mergedPdf = await PDFDocument.create();
-        for (const file of mergeInput.files) {
-            const pdf = await PDFDocument.load(await file.arrayBuffer());
-            const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
-            pages.forEach(p => mergedPdf.addPage(p));
-        }
-        const bytes = await mergedPdf.save();
-        downloadBlob(bytes, "pdf_unito.pdf");
-        status.innerText = "✅ Unione completata!";
+        showStatus("⏳ Elaborazione unione...", "blue");
+        try {
+            const mergedPdf = await PDFDocument.create();
+            for (const file of mergeInput.files) {
+                const pdf = await PDFDocument.load(await file.arrayBuffer());
+                const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                pages.forEach(p => mergedPdf.addPage(p));
+            }
+            const bytes = await mergedPdf.save();
+            downloadBlob(bytes, "pdf_unito.pdf", "application/pdf");
+            showStatus("✅ Unione completata!", "green");
+        } catch (e) { showStatus("❌ Errore durante l'unione", "red"); }
     };
 
-    // --- LOGICA DIVISIONE ---
+    // --- LOGICA DIVISIONE AVANZATA ---
     const splitInput = document.getElementById('splitInput');
     const splitBtn = document.getElementById('splitBtn');
+    const rangesInput = document.getElementById('ranges');
 
     splitInput.onchange = () => {
         splitBtn.disabled = splitInput.files.length === 0;
@@ -110,33 +120,58 @@
     };
 
     splitBtn.onclick = async () => {
-        const status = document.getElementById('status');
-        status.innerText = "⏳ Divisione in corso... Creazione ZIP...";
-        const file = splitInput.files[0];
-        const mainPdf = await PDFDocument.load(await file.arrayBuffer());
-        const pageCount = mainPdf.getPageCount();
-        const zip = new JSZip();
+        const rangeText = rangesInput.value.trim();
+        if (!rangeText) return alert("Inserisci almeno un intervallo! Es: 1-3");
 
-        for (let i = 0; i < pageCount; i++) {
-            const newPdf = await PDFDocument.create();
-            const [page] = await newPdf.copyPages(mainPdf, [i]);
-            newPdf.addPage(page);
-            const bytes = await newPdf.save();
-            zip.file(`pagina_${i + 1}.pdf`, bytes);
+        showStatus("⏳ Divisione in corso...", "blue");
+        try {
+            const file = splitInput.files[0];
+            const mainPdf = await PDFDocument.load(await file.arrayBuffer());
+            const totalPages = mainPdf.getPageCount();
+            const zip = new JSZip();
+
+            // Dividiamo la stringa "1-3, 4-10" in ["1-3", "4-10"]
+            const ranges = rangeText.split(',').map(r => r.trim());
+
+            for (const r of ranges) {
+                const parts = r.split('-').map(Number);
+                const start = parts[0];
+                const end = parts[1] || start; // Se scrivi solo "5", estrae solo pag 5
+
+                if (start > 0 && end <= totalPages && start <= end) {
+                    const newPdf = await PDFDocument.create();
+                    // Calcolo indici (in JS partono da 0, quindi facciamo -1)
+                    const indices = [];
+                    for (let i = start - 1; i < end; i++) indices.push(i);
+
+                    const copiedPages = await newPdf.copyPages(mainPdf, indices);
+                    copiedPages.forEach(p => newPdf.addPage(p));
+
+                    const bytes = await newPdf.save();
+                    zip.file(`pdf_pagine_${start}_a_${end}.pdf`, bytes);
+                }
+            }
+
+            const zipContent = await zip.generateAsync({type: "blob"});
+            downloadBlob(zipContent, "pdf_divisi.zip", "application/zip");
+            showStatus("✅ Fatto! ZIP scaricato.", "green");
+        } catch (e) {
+            console.error(e);
+            showStatus("❌ Errore: controlla gli intervalli inseriti.", "red");
         }
-
-        const zipContent = await zip.generateAsync({type: "blob"});
-        downloadBlob(zipContent, "pagine_estratte.zip");
-        status.innerText = "✅ ZIP creato con " + pageCount + " pagine!";
     };
 
-    function downloadBlob(data, name) {
-        const blob = new Blob([data], { type: data.type || 'application/pdf' });
+    function downloadBlob(data, name, type) {
+        const blob = new Blob([data], { type: type });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = name;
-        a.click();
+        a.href = url; a.download = name; a.click();
+    }
+
+    function showStatus(text, color) {
+        const s = document.getElementById('status');
+        s.innerText = text;
+        s.style.color = color === "blue" ? "#4f46e5" : (color === "green" ? "#10b981" : "#ef4444");
     }
 </script>
 
